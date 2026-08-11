@@ -21,6 +21,10 @@ class SongCandidate:
     reason: str
     source: str
     bucket: str = "primary"
+    track_id: int | None = None
+    collection_id: int | None = None
+    track_view_url: str = ""
+    collection_view_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,10 @@ class ITunesSearchClient:
     def apple_music_search_url(self, artist: str, song_name: str) -> str:
         return f"https://music.apple.com/search?term={quote_plus(f'{artist} {song_name}')}"
 
+    def apple_music_song_url(self, song_name: str, track_id: int) -> str:
+        country = self.country.lower()
+        return f"https://music.apple.com/{country}/song/{slugify(song_name)}/{track_id}"
+
     def _search(self, term: str, limit: int) -> list[dict[str, Any]]:
         url = "https://itunes.apple.com/search"
         params = {
@@ -138,19 +146,45 @@ class ITunesSearchClient:
         return results[0] if results else None
 
     def _to_candidate(self, item: dict[str, Any], query: SongQuery) -> SongCandidate:
-        url = str(item.get("trackViewUrl", "")).strip()
-        if not url:
-            url = self.apple_music_search_url(query.artist, query.song_name)
+        song_name = str(item.get("trackName") or query.song_name).strip()
+        artist = str(item.get("artistName") or query.artist).strip()
+        track_id = optional_int(item.get("trackId"))
+        collection_id = optional_int(item.get("collectionId"))
+        track_view_url = str(item.get("trackViewUrl", "")).strip()
+        collection_view_url = str(item.get("collectionViewUrl", "")).strip()
+        url = self._apple_music_url(
+            song_name=song_name,
+            artist=artist,
+            track_id=track_id,
+            track_view_url=track_view_url,
+        )
         return SongCandidate(
-            song_name=str(item.get("trackName") or query.song_name).strip(),
-            artist=str(item.get("artistName") or query.artist).strip(),
+            song_name=song_name,
+            artist=artist,
             album=str(item.get("collectionName") or "Unknown Album").strip(),
             genre=query.genre,
             apple_music_url=url,
             reason=query.reason,
             source="iTunes Search API",
             bucket=query.bucket,
+            track_id=track_id,
+            collection_id=collection_id,
+            track_view_url=track_view_url,
+            collection_view_url=collection_view_url,
         )
+
+    def _apple_music_url(
+        self,
+        song_name: str,
+        artist: str,
+        track_id: int | None,
+        track_view_url: str,
+    ) -> str:
+        if track_id is not None:
+            return self.apple_music_song_url(song_name, track_id)
+        if track_view_url:
+            return track_view_url
+        return self.apple_music_search_url(artist, song_name)
 
 
 class MusicBrainzClient:
@@ -215,6 +249,29 @@ class LastFmClient:
 
 def normalize(value: str) -> str:
     return " ".join(value.lower().strip().split())
+
+
+def slugify(value: str) -> str:
+    normalized = normalize(value)
+    chars: list[str] = []
+    previous_dash = False
+    for char in normalized:
+        if char.isalnum():
+            chars.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            chars.append("-")
+            previous_dash = True
+    return "".join(chars).strip("-") or "song"
+
+
+def optional_int(value: Any) -> int | None:
+    try:
+        if value in {None, ""}:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def bucket_from_genre(genre: str) -> str:
