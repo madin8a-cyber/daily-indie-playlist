@@ -1,0 +1,42 @@
+name: Daily Indie Playlist
+
+on:
+  schedule:
+    # 09:00 Beijing time = 01:00 UTC
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate playlist
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          PLAYLIST_COUNTRY: ${{ vars.PLAYLIST_COUNTRY || 'US' }}
+          PLAYLIST_OUTPUT_DIR: output
+          SONGS_HISTORY_PATH: data/songs_history.json
+        run: python -m src.generator
+
+      - name: Commit generated playlist
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "Generate daily indie playlist"
+          git push
