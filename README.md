@@ -15,8 +15,11 @@
 - Indie Pop / Indie Rock / Alternative：约 12 首
 - 新歌/高评分/近年优秀作品：约 4 首
 - 经典 Alternative / Indie：约 4 首
+- 配置 `OPENAI_API_KEY` 后，AI curator 会先生成 100 首候选，再筛选 20 首
 - 自动读取 `data/songs_history.json`
 - 历史中出现过的歌曲不会再次加入
+- 同一天不会加入多个相同艺术家的歌曲
+- 最近 30 天内出现过的歌曲不会再次加入
 - 每次生成后自动更新历史
 
 ## 项目结构
@@ -25,6 +28,7 @@
 .
 ├── src/
 │   ├── generator.py
+│   ├── ai_curator.py
 │   ├── music_api.py
 │   ├── recommender.py
 │   └── history.py
@@ -66,7 +70,15 @@ PLAYLIST_OUTPUT_DIR=output
 SONGS_HISTORY_PATH=data/songs_history.json
 ```
 
-`OPENAI_API_KEY` 和 `LASTFM_API_KEY` 都是可选项。没有任何 key 时，项目会使用内置艺术家池和 iTunes Search API fallback。
+`OPENAI_API_KEY` 启用 AI curator：
+
+- 生成 100 首候选
+- 60 首 primary：indie pop / indie rock / alternative
+- 20 首 recent：最近高评分或高口碑新歌
+- 20 首 classic：经典 indie / alternative
+- 本地筛选出最终 20 首：12 primary、4 recent、4 classic
+
+`LASTFM_API_KEY` 是可选增强项。没有任何 key 时，项目会使用内置艺术家池和 iTunes Search API fallback。
 
 ## GitHub Actions 自动运行
 

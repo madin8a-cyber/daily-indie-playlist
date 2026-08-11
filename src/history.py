@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import datetime as dt
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,19 @@ class SongHistory:
 
     def contains(self, artist: str, song_name: str) -> bool:
         return self.key(artist, song_name) in self._seen_keys
+
+    def contains_recent(self, artist: str, song_name: str, playlist_date: str, days: int = 30) -> bool:
+        return self.key(artist, song_name) in self.recent_song_keys(playlist_date, days)
+
+    def recent_song_keys(self, playlist_date: str, days: int = 30) -> set[str]:
+        end_date = dt.date.fromisoformat(playlist_date)
+        start_date = end_date - dt.timedelta(days=days - 1)
+        keys: set[str] = set()
+        for entry in self.entries:
+            added_on = parse_date(entry.date_added)
+            if added_on and start_date <= added_on <= end_date:
+                keys.add(self.key(entry.artist, entry.song_name))
+        return keys
 
     def add_many(self, songs: list[HistoryEntry]) -> None:
         for song in songs:
@@ -76,3 +90,10 @@ class SongHistory:
 def normalize(value: str) -> str:
     return " ".join(value.lower().strip().split())
 
+
+def parse_date(value: str) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        LOGGER.warning("Skipping history entry with invalid date: %s", value)
+        return None

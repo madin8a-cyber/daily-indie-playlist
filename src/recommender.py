@@ -9,7 +9,9 @@ from typing import Any
 
 import requests
 
+from src.ai_curator import AICurator
 from src.history import SongHistory
+from src.history import normalize as normalize_history
 from src.music_api import ITunesSearchClient, LastFmClient, MusicBrainzClient, SongCandidate, SongQuery
 
 LOGGER = logging.getLogger(__name__)
@@ -100,41 +102,85 @@ class Recommender:
 
     def generate(self, playlist_date: str, seed: int, total: int = 20) -> list[SongCandidate]:
         random.seed(seed)
-        plan = self._openai_plan(playlist_date) if self.openai_api_key else None
-        if plan is None:
-            plan = self._fallback_plan()
-
-        primary = self._resolve_bucket(plan.primary, target=12)
-        new_releases = self._resolve_bucket(plan.new_releases, target=4)
-        classics = self._resolve_bucket(plan.classics, target=4)
+        candidates = self._candidate_queries(playlist_date)
+        selected_keys: set[str] = set()
+        selected_artists: set[str] = set()
+        primary = self._resolve_bucket(
+            candidates,
+            bucket="primary",
+            target=12,
+            playlist_date=playlist_date,
+            selected_keys=selected_keys,
+            selected_artists=selected_artists,
+        )
+        new_releases = self._resolve_bucket(
+            candidates,
+            bucket="recent",
+            target=4,
+            playlist_date=playlist_date,
+            selected_keys=selected_keys,
+            selected_artists=selected_artists,
+        )
+        classics = self._resolve_bucket(
+            candidates,
+            bucket="classic",
+            target=4,
+            playlist_date=playlist_date,
+            selected_keys=selected_keys,
+            selected_artists=selected_artists,
+        )
 
         selected = primary + new_releases + classics
         if len(selected) < total:
             LOGGER.warning("Only resolved %s tracks from initial plan; using fallback expansion", len(selected))
-            selected.extend(self._fallback_fill(total - len(selected), selected))
+            selected.extend(self._fallback_fill(total - len(selected), selected, playlist_date))
         if len(selected) < total:
             raise RuntimeError(f"Could only produce {len(selected)} unique tracks; need {total}")
         return selected[:total]
 
-    def _resolve_bucket(self, queries: list[SongQuery], target: int) -> list[SongCandidate]:
+    def _candidate_queries(self, playlist_date: str) -> list[SongQuery]:
+        if self.openai_api_key:
+            try:
+                return AICurator(self.openai_api_key).generate_candidates(playlist_date, self.history, count=100)
+            except RuntimeError as exc:
+                LOGGER.warning("AI curator failed; falling back to local candidate plan: %s", exc)
+        plan = self._fallback_plan()
+        return plan.primary + plan.new_releases + plan.classics
+
+    def _resolve_bucket(
+        self,
+        queries: list[SongQuery],
+        bucket: str,
+        target: int,
+        playlist_date: str,
+        selected_keys: set[str] | None = None,
+        selected_artists: set[str] | None = None,
+    ) -> list[SongCandidate]:
         selected: list[SongCandidate] = []
-        seen_in_run: set[str] = set()
-        for query in queries:
+        selected_keys = selected_keys if selected_keys is not None else set()
+        selected_artists = selected_artists if selected_artists is not None else set()
+        bucket_queries = [query for query in queries if query.bucket == bucket]
+        for query in bucket_queries:
             song = self.itunes.find_song(query)
             if not song:
                 continue
-            key = SongHistory.key(song.artist, song.song_name)
-            if key in seen_in_run or self.history.contains(song.artist, song.song_name):
-                LOGGER.info("Skipping duplicate history track: %s - %s", song.artist, song.song_name)
+            if not self._is_allowed(song, playlist_date, selected_keys, selected_artists):
                 continue
             selected.append(song)
-            seen_in_run.add(key)
+            selected_keys.add(SongHistory.key(song.artist, song.song_name))
+            selected_artists.add(normalize_history(song.artist))
             if len(selected) >= target:
                 break
         return selected
 
-    def _fallback_fill(self, count: int, already_selected: list[SongCandidate]) -> list[SongCandidate]:
+    def _fallback_fill(
+        self,
+        count: int,
+        already_selected: list[SongCandidate],
+        playlist_date: str,
+    ) -> list[SongCandidate]:
         selected_keys = {SongHistory.key(song.artist, song.song_name) for song in already_selected}
+        selected_artists = {normalize_history(song.artist) for song in already_selected}
         candidates: list[SongCandidate] = []
         for artist in random.sample(PRIMARY_ARTISTS + NEW_RELEASE_ARTISTS + CLASSIC_ARTISTS, k=20):
             candidates.extend(
@@ -148,14 +194,37 @@ class Recommender:
         random.shuffle(candidates)
         results: list[SongCandidate] = []
         for candidate in candidates:
-            key = SongHistory.key(candidate.artist, candidate.song_name)
-            if key in selected_keys or self.history.contains(candidate.artist, candidate.song_name):
+            if not self._is_allowed(candidate, playlist_date, selected_keys, selected_artists):
                 continue
             results.append(candidate)
-            selected_keys.add(key)
+            selected_keys.add(SongHistory.key(candidate.artist, candidate.song_name))
+            selected_artists.add(normalize_history(candidate.artist))
             if len(results) == count:
                 break
         return results
+
+    def _is_allowed(
+        self,
+        song: SongCandidate,
+        playlist_date: str,
+        selected_keys: set[str],
+        selected_artists: set[str],
+    ) -> bool:
+        key = SongHistory.key(song.artist, song.song_name)
+        artist_key = normalize_history(song.artist)
+        if key in selected_keys:
+            LOGGER.info("Skipping same-run duplicate track: %s - %s", song.artist, song.song_name)
+            return False
+        if artist_key in selected_artists:
+            LOGGER.info("Skipping same-day duplicate artist: %s", song.artist)
+            return False
+        if self.history.contains(song.artist, song.song_name):
+            LOGGER.info("Skipping historical duplicate track: %s - %s", song.artist, song.song_name)
+            return False
+        if self.history.contains_recent(song.artist, song.song_name, playlist_date, days=30):
+            LOGGER.info("Skipping recent 30-day duplicate track: %s - %s", song.artist, song.song_name)
+            return False
+        return True
 
     def _fallback_plan(self) -> PlaylistPlan:
         LOGGER.info("Using fallback recommender plan")
@@ -163,6 +232,7 @@ class Recommender:
             random.sample(PRIMARY_ARTISTS, k=12),
             genre="Indie Pop / Indie Rock / Alternative",
             reason="Core indie/alternative recommendation from the curated artist pool.",
+            bucket="primary",
         )
 
         new_queries = self._lastfm_queries(["indie", "alternative"], per_tag=6)
@@ -172,6 +242,7 @@ class Recommender:
                     random.sample(NEW_RELEASE_ARTISTS, k=8),
                     genre="New Indie / Alternative",
                     reason="Recent acclaimed indie-adjacent artist selected from the fallback pool.",
+                    bucket="recent",
                 )
             )
 
@@ -179,6 +250,7 @@ class Recommender:
             random.sample(CLASSIC_ARTISTS, k=8),
             genre="Classic Alternative / Indie",
             reason="Classic alternative or indie catalog pick.",
+            bucket="classic",
         )
 
         if self.musicbrainz:
@@ -189,8 +261,8 @@ class Recommender:
 
         return PlaylistPlan(primary=primary_queries, new_releases=new_queries, classics=classic_queries)
 
-    def _artist_queries(self, artists: list[str], genre: str, reason: str) -> list[SongQuery]:
-        return [SongQuery(song_name="", artist=artist, genre=genre, reason=reason) for artist in artists]
+    def _artist_queries(self, artists: list[str], genre: str, reason: str, bucket: str) -> list[SongQuery]:
+        return [SongQuery(song_name="", artist=artist, genre=genre, reason=reason, bucket=bucket) for artist in artists]
 
     def _lastfm_queries(self, tags: list[str], per_tag: int) -> list[SongQuery]:
         if not self.lastfm:
@@ -273,7 +345,7 @@ class Recommender:
                     artist=artist,
                     genre=str(item.get("genre", "Alternative / Indie")).strip(),
                     reason=str(item.get("reason", "AI-assisted indie playlist recommendation.")).strip(),
+                    bucket=str(item.get("bucket", "primary")).strip(),
                 )
             )
         return queries
-

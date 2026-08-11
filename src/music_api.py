@@ -20,6 +20,7 @@ class SongCandidate:
     apple_music_url: str
     reason: str
     source: str
+    bucket: str = "primary"
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class SongQuery:
     artist: str
     genre: str
     reason: str
+    bucket: str = "primary"
 
 
 class HttpClient:
@@ -84,6 +86,7 @@ class ITunesSearchClient:
                         artist=str(item.get("artistName", artist)),
                         genre=genre,
                         reason=reason,
+                        bucket=bucket_from_genre(genre),
                     ),
                 )
             )
@@ -98,6 +101,7 @@ class ITunesSearchClient:
                     artist=str(item.get("artistName", "")),
                     genre=genre,
                     reason=reason,
+                    bucket=bucket_from_genre(genre),
                 ),
             )
             for item in self._search(term, limit=limit)
@@ -145,6 +149,7 @@ class ITunesSearchClient:
             apple_music_url=url,
             reason=query.reason,
             source="iTunes Search API",
+            bucket=query.bucket,
         )
 
 
@@ -170,6 +175,7 @@ class MusicBrainzClient:
                         artist=artist,
                         genre="Alternative / Indie",
                         reason="Discovered through MusicBrainz metadata search.",
+                        bucket="classic",
                     )
                 )
         return queries
@@ -201,6 +207,7 @@ class LastFmClient:
                     artist=str(artist.get("name", "") if isinstance(artist, dict) else artist).strip(),
                     genre=tag.title(),
                     reason=f"High-scrobble Last.fm track tagged {tag}.",
+                    bucket="recent",
                 )
             )
         return [query for query in queries if query.song_name and query.artist]
@@ -208,6 +215,15 @@ class LastFmClient:
 
 def normalize(value: str) -> str:
     return " ".join(value.lower().strip().split())
+
+
+def bucket_from_genre(genre: str) -> str:
+    genre_key = normalize(genre)
+    if "classic" in genre_key:
+        return "classic"
+    if "new" in genre_key or "recent" in genre_key:
+        return "recent"
+    return "primary"
 
 
 class AppleMusicPlaylistClient:
