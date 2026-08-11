@@ -99,6 +99,8 @@ class Recommender:
         self.lastfm = lastfm
         self.musicbrainz = musicbrainz
         self.openai_api_key = openai_api_key
+        self._song_lookup_cache: dict[str, SongCandidate | None] = {}
+        self._artist_tracks_cache: dict[tuple[str, str, int], list[SongCandidate]] = {}
 
     def generate(self, playlist_date: str, seed: int, total: int = 20) -> list[SongCandidate]:
         random.seed(seed)
@@ -161,7 +163,7 @@ class Recommender:
         selected_artists = selected_artists if selected_artists is not None else set()
         bucket_queries = [query for query in queries if query.bucket == bucket]
         for query in bucket_queries:
-            song = self.itunes.find_song(query)
+            song = self._find_song_cached(query)
             if not song:
                 continue
             if not self._is_allowed(song, playlist_date, selected_keys, selected_artists):
@@ -184,7 +186,7 @@ class Recommender:
         candidates: list[SongCandidate] = []
         for artist in random.sample(PRIMARY_ARTISTS + NEW_RELEASE_ARTISTS + CLASSIC_ARTISTS, k=20):
             candidates.extend(
-                self.itunes.search_artist_tracks(
+                self._search_artist_tracks_cached(
                     artist=artist,
                     genre="Alternative / Indie",
                     reason="Fallback replacement selected from the curated artist pool.",
@@ -202,6 +204,30 @@ class Recommender:
             if len(results) == count:
                 break
         return results
+
+    def _find_song_cached(self, query: SongQuery) -> SongCandidate | None:
+        cache_key = SongHistory.key(query.artist, query.song_name or "*")
+        if cache_key in self._song_lookup_cache:
+            LOGGER.info("[iTunes] recommender cache hit: %s - %s", query.artist, query.song_name or "*")
+            return self._song_lookup_cache[cache_key]
+        song = self.itunes.find_song(query)
+        self._song_lookup_cache[cache_key] = song
+        return song
+
+    def _search_artist_tracks_cached(
+        self,
+        artist: str,
+        genre: str,
+        reason: str,
+        limit: int,
+    ) -> list[SongCandidate]:
+        cache_key = (normalize_history(artist), normalize_history(genre), limit)
+        if cache_key in self._artist_tracks_cache:
+            LOGGER.info("[iTunes] recommender artist cache hit: %s", artist)
+            return self._artist_tracks_cache[cache_key]
+        songs = self.itunes.search_artist_tracks(artist=artist, genre=genre, reason=reason, limit=limit)
+        self._artist_tracks_cache[cache_key] = songs
+        return songs
 
     def _is_allowed(
         self,

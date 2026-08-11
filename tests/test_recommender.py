@@ -145,6 +145,25 @@ class RecommenderTests(unittest.TestCase):
             {(song.artist, song.song_name) for song in songs},
         )
 
+    def test_recommender_caches_duplicate_song_lookup(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            fake_itunes = FakeITunesClient()
+            recommender = Recommender(itunes=fake_itunes, history=history)
+            query = SongQuery(
+                song_name="Dreams Tonite",
+                artist="Alvvays",
+                genre="Indie Pop",
+                reason="Cache test",
+                bucket="primary",
+            )
+
+            first = recommender._find_song_cached(query)
+            second = recommender._find_song_cached(query)
+
+        self.assertEqual(first, second)
+        self.assertEqual(fake_itunes.counter, 1)
+
 
 def make_candidates(count: int, bucket: str, artist_prefix: str) -> list[SongQuery]:
     return [

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -37,7 +38,11 @@ class SongQuery:
 
 
 class HttpClient:
-    def __init__(self) -> None:
+    RETRY_DELAYS = (2, 5, 10)
+
+    def __init__(self, min_interval: float = 0.5, max_interval: float = 1.0) -> None:
+        self.min_interval = min_interval
+        self.max_interval = max_interval
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -47,11 +52,17 @@ class HttpClient:
         )
 
     def get_json(self, url: str, **kwargs: Any) -> dict[str, Any]:
-        for attempt in range(4):
+        for attempt in range(len(self.RETRY_DELAYS) + 1):
+            time.sleep(random.uniform(self.min_interval, self.max_interval))
             response = self.session.get(url, timeout=25, **kwargs)
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < 3:
-                sleep_seconds = 2**attempt
-                LOGGER.warning("Retrying %s after HTTP %s", url, response.status_code)
+            if response.status_code == 429 and attempt < len(self.RETRY_DELAYS):
+                sleep_seconds = self.RETRY_DELAYS[attempt]
+                LOGGER.warning("[iTunes] rate limited, retrying in %s seconds...", sleep_seconds)
+                time.sleep(sleep_seconds)
+                continue
+            if response.status_code in {500, 502, 503, 504} and attempt < len(self.RETRY_DELAYS):
+                sleep_seconds = self.RETRY_DELAYS[attempt]
+                LOGGER.warning("Retrying %s after HTTP %s in %s seconds", url, response.status_code, sleep_seconds)
                 time.sleep(sleep_seconds)
                 continue
             response.raise_for_status()
@@ -60,9 +71,17 @@ class HttpClient:
 
 
 class ITunesSearchClient:
-    def __init__(self, country: str = "US", http: HttpClient | None = None) -> None:
+    def __init__(
+        self,
+        country: str = "US",
+        http: HttpClient | None = None,
+        daily_request_limit: int = 50,
+    ) -> None:
         self.country = country
         self.http = http or HttpClient()
+        self.daily_request_limit = daily_request_limit
+        self.request_count = 0
+        self._search_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
 
     def find_song(self, query: SongQuery) -> SongCandidate | None:
         terms = [
@@ -119,6 +138,18 @@ class ITunesSearchClient:
         return f"https://music.apple.com/{country}/song/{slugify(song_name)}/{track_id}"
 
     def _search(self, term: str, limit: int) -> list[dict[str, Any]]:
+        cache_key = (normalize(term), limit)
+        if cache_key in self._search_cache:
+            LOGGER.info("[iTunes] cache hit: %s", term)
+            return self._search_cache[cache_key]
+        if self.request_count >= self.daily_request_limit:
+            LOGGER.warning(
+                "[iTunes] daily request limit reached (%s); skipping new search: %s",
+                self.daily_request_limit,
+                term,
+            )
+            return []
+        LOGGER.info("[iTunes] searching: %s", term)
         url = "https://itunes.apple.com/search"
         params = {
             "term": term,
@@ -127,9 +158,12 @@ class ITunesSearchClient:
             "country": self.country,
             "limit": limit,
         }
+        self.request_count += 1
         payload = self.http.get_json(url, params=params)
         results = payload.get("results", [])
-        return [item for item in results if isinstance(item, dict)]
+        songs = [item for item in results if isinstance(item, dict)]
+        self._search_cache[cache_key] = songs
+        return songs
 
     def _best_match(self, results: list[dict[str, Any]], query: SongQuery) -> dict[str, Any] | None:
         artist_key = normalize(query.artist)
