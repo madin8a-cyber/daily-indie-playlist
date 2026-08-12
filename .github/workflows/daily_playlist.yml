@@ -41,3 +41,12 @@ jobs:
           git commit -m "Generate daily indie playlist" || exit 0
           git pull --rebase origin main
           git push origin main
+
+      - name: Send Email
+        continue-on-error: true
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          PLAYLIST_OUTPUT_DIR: output
+        run: python -m src.email_notifier

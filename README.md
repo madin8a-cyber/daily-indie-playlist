@@ -111,10 +111,38 @@ Settings -> Secrets and variables -> Actions
 
 - `OPENAI_API_KEY`
 - `LASTFM_API_KEY`
+- `MAIL_USERNAME`
+- `MAIL_PASSWORD`
+- `MAIL_TO`
 
 可选 Variables：
 
 - `PLAYLIST_COUNTRY`，默认 `US`
+
+## 每日邮件通知
+
+GitHub Actions 生成并提交每日歌单后，会尝试通过 Gmail SMTP 发送邮件。邮件发送失败不会影响歌单生成。
+
+需要在 GitHub Actions Secrets 中配置：
+
+- `MAIL_USERNAME`：Gmail 邮箱地址
+- `MAIL_PASSWORD`：Gmail App Password
+- `MAIL_TO`：接收邮箱，可以是你的手机邮箱
+
+SMTP 配置固定为：
+
+```text
+server: smtp.gmail.com
+port: 465
+```
+
+邮件内容包含：
+
+- 今日歌单标题
+- 20 首歌曲列表
+- Artist - Song
+- Apple Music 链接
+- `output/YYYY-MM-DD.md` 的 GitHub 文件链接
 
 ## 输出示例
 
