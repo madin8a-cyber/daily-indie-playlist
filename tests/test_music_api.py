@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from src.music_api import HttpClient, ITunesSearchClient, SongQuery
@@ -39,10 +41,13 @@ class FakeHttp:
         return {
             "results": [
                 {
-                    "trackId": self.calls,
+                    "trackId": 1000 + self.calls,
+                    "collectionId": 2000 + self.calls,
                     "trackName": kwargs["params"]["term"],
                     "artistName": "Artist",
                     "collectionName": "Album",
+                    "trackViewUrl": f"https://music.apple.com/us/album/x?i={1000 + self.calls}",
+                    "collectionViewUrl": f"https://music.apple.com/us/album/{2000 + self.calls}",
                 }
             ]
         }
@@ -115,27 +120,101 @@ class MusicApiTests(unittest.TestCase):
             ]
         )
 
-        with patch("src.music_api.random.uniform", return_value=0.5), patch("src.music_api.time.sleep") as sleep:
+        with patch("src.music_api.random.uniform", return_value=0.8), patch("src.music_api.time.sleep") as sleep:
             payload = http.get_json("https://itunes.apple.com/search")
 
         self.assertEqual(payload, {"ok": True})
-        sleep.assert_any_call(0.5)
+        sleep.assert_any_call(0.8)
         sleep.assert_any_call(2)
         sleep.assert_any_call(5)
         self.assertEqual(http.session.calls, 3)
 
     def test_daily_request_limit_reuses_cache_and_skips_new_terms(self) -> None:
         fake_http = FakeHttp()
-        client = ITunesSearchClient(country="US", http=fake_http, daily_request_limit=1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = ITunesSearchClient(
+                country="US",
+                http=fake_http,
+                daily_request_limit=1,
+                cache_path=Path(temp_dir) / "itunes_cache.json",
+            )
 
-        first = client._search("Alvvays", limit=1)
-        cached = client._search("Alvvays", limit=1)
-        skipped = client._search("Beach House", limit=1)
+            first = client._search("Alvvays", limit=1)
+            cached = client._search("Alvvays", limit=1)
+            skipped = client._search("Beach House", limit=1)
 
         self.assertEqual(len(first), 1)
         self.assertEqual(cached, first)
         self.assertEqual(skipped, [])
         self.assertEqual(fake_http.calls, 1)
+
+    def test_normal_search_returns_track_id_and_writes_cache(self) -> None:
+        fake_http = FakeHttp()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / "itunes_cache.json"
+            client = ITunesSearchClient(country="US", http=fake_http, cache_path=cache_path)
+
+            candidate = client.find_song(
+                SongQuery(
+                    song_name="Dreams Tonite",
+                    artist="Alvvays",
+                    genre="Indie Pop",
+                    reason="Test",
+                )
+            )
+
+            self.assertIsNotNone(candidate)
+            assert candidate is not None
+            self.assertEqual(candidate.track_id, 1001)
+            self.assertIn("alvvays|dreams tonite", cache_path.read_text(encoding="utf-8"))
+
+    def test_song_cache_hit_does_not_call_api(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / "itunes_cache.json"
+            cache_path.write_text(
+                """
+{
+  "alvvays|dreams tonite": {
+    "trackId": 123,
+    "collectionId": 456,
+    "trackName": "Dreams Tonite",
+    "artistName": "Alvvays",
+    "collectionName": "Antisocialites",
+    "trackViewUrl": "https://music.apple.com/us/album/antisocialites?i=123",
+    "collectionViewUrl": "https://music.apple.com/us/album/antisocialites/456"
+  }
+}
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_http = FakeHttp()
+            client = ITunesSearchClient(country="US", http=fake_http, cache_path=cache_path)
+
+            candidate = client.find_song(
+                SongQuery(
+                    song_name="Dreams Tonite",
+                    artist="Alvvays",
+                    genre="Indie Pop",
+                    reason="Test",
+                )
+            )
+
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        self.assertEqual(candidate.track_id, 123)
+        self.assertEqual(fake_http.calls, 0)
+
+    def test_429_after_retries_returns_empty_search_results(self) -> None:
+        http = HttpClient()
+        http.session = FakeSession([FakeResponse(429), FakeResponse(429), FakeResponse(429), FakeResponse(429)])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = ITunesSearchClient(country="US", http=http, cache_path=Path(temp_dir) / "itunes_cache.json")
+
+            with patch("src.music_api.random.uniform", return_value=0.8), patch("src.music_api.time.sleep"):
+                result = client._search("Alvvays Dreams Tonite", limit=10)
+
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":

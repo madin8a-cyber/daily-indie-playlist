@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -37,10 +39,14 @@ class SongQuery:
     bucket: str = "primary"
 
 
+class ITunesRateLimitError(RuntimeError):
+    """Raised when iTunes keeps returning 429 after all retries."""
+
+
 class HttpClient:
     RETRY_DELAYS = (2, 5, 10)
 
-    def __init__(self, min_interval: float = 0.5, max_interval: float = 1.0) -> None:
+    def __init__(self, min_interval: float = 0.8, max_interval: float = 1.5) -> None:
         self.min_interval = min_interval
         self.max_interval = max_interval
         self.session = requests.Session()
@@ -57,9 +63,12 @@ class HttpClient:
             response = self.session.get(url, timeout=25, **kwargs)
             if response.status_code == 429 and attempt < len(self.RETRY_DELAYS):
                 sleep_seconds = self.RETRY_DELAYS[attempt]
-                LOGGER.warning("[iTunes] rate limited, retrying in %s seconds...", sleep_seconds)
+                LOGGER.warning("[iTunes] Rate limited, retry: attempt %s", attempt + 1)
                 time.sleep(sleep_seconds)
                 continue
+            if response.status_code == 429:
+                LOGGER.error("[iTunes] Failed after retries: HTTP 429")
+                raise ITunesRateLimitError("iTunes Search API returned HTTP 429 after retries")
             if response.status_code in {500, 502, 503, 504} and attempt < len(self.RETRY_DELAYS):
                 sleep_seconds = self.RETRY_DELAYS[attempt]
                 LOGGER.warning("Retrying %s after HTTP %s in %s seconds", url, response.status_code, sleep_seconds)
@@ -76,14 +85,21 @@ class ITunesSearchClient:
         country: str = "US",
         http: HttpClient | None = None,
         daily_request_limit: int = 50,
+        cache_path: Path | str = Path("data/itunes_cache.json"),
     ) -> None:
         self.country = country
         self.http = http or HttpClient()
         self.daily_request_limit = daily_request_limit
         self.request_count = 0
         self._search_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
+        self.cache_path = Path(cache_path)
+        self._song_cache = self._load_song_cache()
 
     def find_song(self, query: SongQuery) -> SongCandidate | None:
+        cached = self._song_cache_get(query.artist, query.song_name)
+        if cached:
+            LOGGER.info("[iTunes] Cache hit:\n%s - %s", query.artist, query.song_name)
+            return self._to_candidate(cached, query)
         terms = [
             f"{query.artist} {query.song_name}",
             f"{query.song_name} {query.artist}",
@@ -93,6 +109,7 @@ class ITunesSearchClient:
             result = self._search(term, limit=10)
             match = self._best_match(result, query)
             if match:
+                self._song_cache_set(query.artist, query.song_name, match)
                 return self._to_candidate(match, query)
         LOGGER.info("No iTunes match for %s - %s", query.artist, query.song_name)
         return None
@@ -140,7 +157,7 @@ class ITunesSearchClient:
     def _search(self, term: str, limit: int) -> list[dict[str, Any]]:
         cache_key = (normalize(term), limit)
         if cache_key in self._search_cache:
-            LOGGER.info("[iTunes] cache hit: %s", term)
+            LOGGER.info("[iTunes] Cache hit:\n%s", term)
             return self._search_cache[cache_key]
         if self.request_count >= self.daily_request_limit:
             LOGGER.warning(
@@ -149,7 +166,7 @@ class ITunesSearchClient:
                 term,
             )
             return []
-        LOGGER.info("[iTunes] searching: %s", term)
+        LOGGER.info("[iTunes] Searching:\n%s", term)
         url = "https://itunes.apple.com/search"
         params = {
             "term": term,
@@ -159,11 +176,58 @@ class ITunesSearchClient:
             "limit": limit,
         }
         self.request_count += 1
-        payload = self.http.get_json(url, params=params)
+        try:
+            payload = self.http.get_json(url, params=params)
+        except ITunesRateLimitError:
+            LOGGER.error("[iTunes] Failed after retries: %s", term)
+            self._search_cache[cache_key] = []
+            return []
         results = payload.get("results", [])
         songs = [item for item in results if isinstance(item, dict)]
         self._search_cache[cache_key] = songs
         return songs
+
+    def _song_cache_get(self, artist: str, song_name: str) -> dict[str, Any] | None:
+        if not song_name:
+            return None
+        cached = self._song_cache.get(song_cache_key(artist, song_name))
+        if not isinstance(cached, dict):
+            return None
+        return cached
+
+    def _song_cache_set(self, artist: str, song_name: str, item: dict[str, Any]) -> None:
+        if not artist or not song_name:
+            return
+        cache_item = {
+            "trackId": optional_int(item.get("trackId")),
+            "collectionId": optional_int(item.get("collectionId")),
+            "trackName": str(item.get("trackName") or song_name).strip(),
+            "artistName": str(item.get("artistName") or artist).strip(),
+            "collectionName": str(item.get("collectionName") or "Unknown Album").strip(),
+            "trackViewUrl": str(item.get("trackViewUrl", "")).strip(),
+            "collectionViewUrl": str(item.get("collectionViewUrl", "")).strip(),
+        }
+        self._song_cache[song_cache_key(artist, song_name)] = cache_item
+        self._save_song_cache()
+
+    def _load_song_cache(self) -> dict[str, dict[str, Any]]:
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.cache_path.exists():
+            self.cache_path.write_text("{}\n", encoding="utf-8")
+            return {}
+        try:
+            payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            LOGGER.warning("Invalid iTunes cache JSON at %s; starting with empty cache", self.cache_path)
+            return {}
+        if not isinstance(payload, dict):
+            LOGGER.warning("Invalid iTunes cache shape at %s; starting with empty cache", self.cache_path)
+            return {}
+        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+
+    def _save_song_cache(self) -> None:
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self.cache_path.write_text(json.dumps(self._song_cache, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     def _best_match(self, results: list[dict[str, Any]], query: SongQuery) -> dict[str, Any] | None:
         artist_key = normalize(query.artist)
@@ -283,6 +347,10 @@ class LastFmClient:
 
 def normalize(value: str) -> str:
     return " ".join(value.lower().strip().split())
+
+
+def song_cache_key(artist: str, song_name: str) -> str:
+    return f"{normalize(artist)}|{normalize(song_name)}"
 
 
 def slugify(value: str) -> str:
