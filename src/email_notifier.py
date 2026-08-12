@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import json
 import logging
 import os
 import re
@@ -29,18 +30,21 @@ def main() -> int:
     playlist_date = os.environ.get("PLAYLIST_DATE") or dt.date.today().isoformat()
     output_dir = Path(os.environ.get("PLAYLIST_OUTPUT_DIR", "output"))
     playlist_path = output_dir / f"{playlist_date}.md"
+    status_path = Path(os.environ.get("LAST_RUN_PATH", "data/last_run.json"))
     if not playlist_path.exists():
         LOGGER.warning("Playlist output not found; skipping email: %s", playlist_path)
+        write_last_run(status_path, playlist_date, 0, "skipped: playlist output not found")
         return 0
 
     username = os.environ.get("MAIL_USERNAME")
     password = os.environ.get("MAIL_PASSWORD")
     mail_to = os.environ.get("MAIL_TO")
+    title, tracks = parse_playlist_markdown(playlist_path)
     if not username or not password or not mail_to:
         LOGGER.warning("Mail secrets are incomplete; skipping email")
+        write_last_run(status_path, playlist_date, len(tracks), "skipped: mail secrets incomplete")
         return 0
 
-    title, tracks = parse_playlist_markdown(playlist_path)
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     github_ref = os.environ.get("GITHUB_REF_NAME", "main")
     output_url = build_output_url(repo, github_ref, playlist_path)
@@ -53,8 +57,14 @@ def main() -> int:
         tracks=tracks,
         output_url=output_url,
     )
-    send_email(username=username, password=password, message=message)
+    try:
+        send_email(username=username, password=password, message=message)
+    except Exception as exc:
+        LOGGER.exception("Failed to send Daily Indie Mix email")
+        write_last_run(status_path, playlist_date, len(tracks), f"failed: {exc}")
+        return 0
     LOGGER.info("Sent Daily Indie Mix email to %s", mail_to)
+    write_last_run(status_path, playlist_date, len(tracks), "sent")
     return 0
 
 
@@ -140,6 +150,18 @@ def send_email(username: str, password: str, message: EmailMessage) -> None:
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(username, password)
         smtp.send_message(message)
+
+
+def write_last_run(path: Path, playlist_date: str, songs_count: int, email_status: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "execution_time": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "playlist_date": playlist_date,
+        "songs_count": songs_count,
+        "email_status": email_status,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    LOGGER.info("Wrote run status to %s", path)
 
 
 def configure_logging() -> None:
