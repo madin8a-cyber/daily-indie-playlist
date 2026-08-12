@@ -7,5 +7,41 @@
     "collectionName": "Morgana",
     "trackViewUrl": "https://music.apple.com/us/album/something-in-the-moon/1601469664?i=1601470056&uo=4",
     "collectionViewUrl": "https://music.apple.com/us/album/something-in-the-moon/1601469664?i=1601470056&uo=4"
+  },
+  "kid rock|classic rock": {
+    "trackId": 1440891171,
+    "collectionId": 1440891166,
+    "trackName": "Mr. Brightside",
+    "artistName": "The Killers",
+    "collectionName": "Direct Hits",
+    "trackViewUrl": "https://music.apple.com/us/album/mr-brightside/1440891166?i=1440891171&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/mr-brightside/1440891166?i=1440891171&uo=4"
+  },
+  "mary schmary|classic rock": {
+    "trackId": 1596547852,
+    "collectionId": 1596547836,
+    "trackName": "Classic Rock (Interlude) [Live]",
+    "artistName": "Mary Schmary",
+    "collectionName": "Hidden Agenda Items",
+    "trackViewUrl": "https://music.apple.com/us/album/classic-rock-interlude-live/1596547836?i=1596547852&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/classic-rock-interlude-live/1596547836?i=1596547852&uo=4"
+  },
+  "40 watt dreams|classic rock": {
+    "trackId": 881335259,
+    "collectionId": 881335247,
+    "trackName": "Classic Rock",
+    "artistName": "40 Watt Dreams",
+    "collectionName": "After the Show",
+    "trackViewUrl": "https://music.apple.com/us/album/classic-rock/881335247?i=881335259&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/classic-rock/881335247?i=881335259&uo=4"
+  },
+  "xpiral|classic rock": {
+    "trackId": 651880159,
+    "collectionId": 651879763,
+    "trackName": "The Chain",
+    "artistName": "Fleetwood Mac",
+    "collectionName": "Rumours (Super Deluxe Edition)",
+    "trackViewUrl": "https://music.apple.com/us/album/the-chain/651879763?i=651880159&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/the-chain/651879763?i=651880159&uo=4"
   }
 }
