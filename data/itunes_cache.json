@@ -43,5 +43,41 @@
     "collectionName": "Rumours (Super Deluxe Edition)",
     "trackViewUrl": "https://music.apple.com/us/album/the-chain/651879763?i=651880159&uo=4",
     "collectionViewUrl": "https://music.apple.com/us/album/the-chain/651879763?i=651880159&uo=4"
+  },
+  "andrew faulkner|classic rock": {
+    "trackId": 198329933,
+    "collectionId": 198329118,
+    "trackName": "Sunday Too Far Away",
+    "artistName": "Andrew Walker",
+    "collectionName": "Kippers & Custard",
+    "trackViewUrl": "https://music.apple.com/us/album/sunday-too-far-away/198329118?i=198329933&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/sunday-too-far-away/198329118?i=198329933&uo=4"
+  },
+  "kevin paez|classic rock": {
+    "trackId": 1481656624,
+    "collectionId": 1481656619,
+    "trackName": "When Young and Free",
+    "artistName": "Jordan Alexander & Kevin Paez",
+    "collectionName": "Motivation Through ROCK",
+    "trackViewUrl": "https://music.apple.com/us/album/when-young-and-free/1481656619?i=1481656624&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/when-young-and-free/1481656619?i=1481656624&uo=4"
+  },
+  "the high score|classic rock": {
+    "trackId": 651880159,
+    "collectionId": 651879763,
+    "trackName": "The Chain",
+    "artistName": "Fleetwood Mac",
+    "collectionName": "Rumours (Super Deluxe Edition)",
+    "trackViewUrl": "https://music.apple.com/us/album/the-chain/651879763?i=651880159&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/the-chain/651879763?i=651880159&uo=4"
+  },
+  "dj bobby b|classic rock": {
+    "trackId": 1862662882,
+    "collectionId": 1862662672,
+    "trackName": "Here I Go Again (1987 Version / 2017 Remaster)",
+    "artistName": "Whitesnake",
+    "collectionName": "Whitesnake (30th Anniversary Super Deluxe Edition)",
+    "trackViewUrl": "https://music.apple.com/us/album/here-i-go-again-1987-version-2017-remaster/1862662672?i=1862662882&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/here-i-go-again-1987-version-2017-remaster/1862662672?i=1862662882&uo=4"
   }
 }
