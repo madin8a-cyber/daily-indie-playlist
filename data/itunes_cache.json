@@ -79,5 +79,23 @@
     "collectionName": "Whitesnake (30th Anniversary Super Deluxe Edition)",
     "trackViewUrl": "https://music.apple.com/us/album/here-i-go-again-1987-version-2017-remaster/1862662672?i=1862662882&uo=4",
     "collectionViewUrl": "https://music.apple.com/us/album/here-i-go-again-1987-version-2017-remaster/1862662672?i=1862662882&uo=4"
+  },
+  "giant panda|classic rock": {
+    "trackId": 280355659,
+    "collectionId": 280354859,
+    "trackName": "Classic Rock",
+    "artistName": "Giant Panda",
+    "collectionName": "Fly School Reunion",
+    "trackViewUrl": "https://music.apple.com/us/album/classic-rock/280354859?i=280355659&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/classic-rock/280354859?i=280355659&uo=4"
+  },
+  "wide eyes|classic rock": {
+    "trackId": 1440891171,
+    "collectionId": 1440891166,
+    "trackName": "Mr. Brightside",
+    "artistName": "The Killers",
+    "collectionName": "Direct Hits",
+    "trackViewUrl": "https://music.apple.com/us/album/mr-brightside/1440891166?i=1440891171&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/mr-brightside/1440891166?i=1440891171&uo=4"
   }
 }
