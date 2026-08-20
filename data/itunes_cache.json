@@ -97,5 +97,23 @@
     "collectionName": "Direct Hits",
     "trackViewUrl": "https://music.apple.com/us/album/mr-brightside/1440891166?i=1440891171&uo=4",
     "collectionViewUrl": "https://music.apple.com/us/album/mr-brightside/1440891166?i=1440891171&uo=4"
+  },
+  "till & obel|classic rock": {
+    "trackId": 681187236,
+    "collectionId": 681187053,
+    "trackName": "Aventine",
+    "artistName": "Agnes Obel",
+    "collectionName": "Aventine",
+    "trackViewUrl": "https://music.apple.com/us/album/aventine/681187053?i=681187236&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/aventine/681187053?i=681187236&uo=4"
+  },
+  "bug attack!|classic rock": {
+    "trackId": 190737658,
+    "collectionId": 190737573,
+    "trackName": "Metal Health (Bang Your Head)",
+    "artistName": "Quiet Riot",
+    "collectionName": "Metal Health (Bonus Track Version)",
+    "trackViewUrl": "https://music.apple.com/us/album/metal-health-bang-your-head/190737573?i=190737658&uo=4",
+    "collectionViewUrl": "https://music.apple.com/us/album/metal-health-bang-your-head/190737573?i=190737658&uo=4"
   }
 }
