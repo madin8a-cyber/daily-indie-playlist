@@ -112,6 +112,49 @@ EMERGENCY_QUERIES = [
     ("classic", "The Breeders", "Cannonball", "Classic Alternative"),
 ]
 
+BROAD_FALLBACK_QUERIES = [
+    ("primary", "Fleetwood Mac", "Dreams", "Soft Rock"),
+    ("primary", "Tom Petty and the Heartbreakers", "Learning to Fly", "Soft Rock"),
+    ("primary", "The Cars", "Drive", "Soft Rock"),
+    ("primary", "Crowded House", "Don't Dream It's Over", "Soft Rock"),
+    ("primary", "The Sundays", "Here's Where the Story Ends", "Jangle Pop"),
+    ("primary", "Prefab Sprout", "When Love Breaks Down", "Sophisti-Pop"),
+    ("primary", "Tears for Fears", "Everybody Wants To Rule The World", "Pop Rock"),
+    ("primary", "The Police", "Every Little Thing She Does Is Magic", "Pop Rock"),
+    ("primary", "Roxy Music", "More Than This", "Soft Rock"),
+    ("primary", "Talk Talk", "It's My Life", "Art Pop"),
+    ("primary", "The Blue Nile", "The Downtown Lights", "Sophisti-Pop"),
+    ("primary", "Sade", "By Your Side", "Pop"),
+    ("primary", "George Harrison", "My Sweet Lord", "Soft Rock"),
+    ("primary", "Electric Light Orchestra", "Telephone Line", "Soft Rock"),
+    ("primary", "Billy Joel", "Vienna", "Soft Rock"),
+    ("primary", "Elton John", "Tiny Dancer", "Soft Rock"),
+    ("primary", "Carole King", "It's Too Late", "Soft Rock"),
+    ("primary", "Carly Simon", "You're So Vain", "Soft Rock"),
+    ("primary", "Steely Dan", "Do It Again", "Soft Rock"),
+    ("primary", "America", "A Horse with No Name", "Soft Rock"),
+    ("primary", "The Doobie Brothers", "What a Fool Believes", "Soft Rock"),
+    ("primary", "Hall & Oates", "She's Gone", "Pop Rock"),
+    ("primary", "10cc", "I'm Not In Love", "Soft Rock"),
+    ("primary", "Paul Simon", "Graceland", "Pop Rock"),
+    ("recent", "Haim", "The Steps", "Pop Rock"),
+    ("recent", "The 1975", "Part of the Band", "Pop Rock"),
+    ("recent", "Lorde", "Solar Power", "Pop"),
+    ("recent", "Maggie Rogers", "Light On", "Pop"),
+    ("recent", "Christine and the Queens", "People, I've been sad", "Pop"),
+    ("recent", "Kacey Musgraves", "Slow Burn", "Soft Pop"),
+    ("recent", "Harry Styles", "As It Was", "Pop"),
+    ("recent", "Dua Lipa", "Levitating", "Pop"),
+    ("classic", "Kate Bush", "Running Up That Hill (A Deal With God)", "Classic Pop"),
+    ("classic", "Peter Gabriel", "Solsbury Hill", "Soft Rock"),
+    ("classic", "David Bowie", "Heroes", "Classic Pop Rock"),
+    ("classic", "Talking Heads", "This Must Be the Place (Naive Melody)", "Classic Pop Rock"),
+    ("classic", "Blondie", "Dreaming", "Classic Pop Rock"),
+    ("classic", "The Pretenders", "Brass in Pocket", "Classic Pop Rock"),
+    ("classic", "The Cranberries", "Dreams", "Classic Pop Rock"),
+    ("classic", "Mazzy Star", "Fade Into You", "Dream Pop"),
+]
+
 
 @dataclass(frozen=True)
 class PlaylistPlan:
@@ -237,11 +280,19 @@ class Recommender:
         if len(selected) < total:
             selected.extend(
                 self._relaxed_fallback_from_queries(
-                    candidates + self._emergency_queries(),
+                    candidates + self._emergency_queries() + self._broad_fallback_queries(),
                     bucket=None,
                     count=total - len(selected),
                     selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
                     selected_artists={normalize_history(song.artist) for song in selected},
+                )
+            )
+        if len(selected) < total:
+            selected.extend(
+                self._last_chance_fallback(
+                    queries=self._broad_fallback_queries() + self._emergency_queries(),
+                    count=total - len(selected),
+                    selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
                 )
             )
         if len(selected) < total:
@@ -404,6 +455,43 @@ class Recommender:
             )
             for bucket, artist, song_name, genre in EMERGENCY_QUERIES
         ]
+
+    def _broad_fallback_queries(self) -> list[SongQuery]:
+        return [
+            SongQuery(
+                song_name=song_name,
+                artist=artist,
+                genre=genre,
+                reason="Broad fallback pick from soft rock or pop to keep the daily playlist complete.",
+                bucket=bucket,
+            )
+            for bucket, artist, song_name, genre in BROAD_FALLBACK_QUERIES
+        ]
+
+    def _last_chance_fallback(
+        self,
+        queries: list[SongQuery],
+        count: int,
+        selected_keys: set[str],
+    ) -> list[SongCandidate]:
+        results: list[SongCandidate] = []
+        for query in queries:
+            if not query.song_name or not query.artist:
+                continue
+            candidate = self._unverified_candidate(query, relaxed=True)
+            key = SongHistory.key(candidate.artist, candidate.song_name)
+            if key in selected_keys:
+                continue
+            LOGGER.warning(
+                "Using last-chance broad fallback candidate: %s - %s",
+                candidate.artist,
+                candidate.song_name,
+            )
+            results.append(candidate)
+            selected_keys.add(key)
+            if len(results) == count:
+                break
+        return results
 
     def _find_song_cached(self, query: SongQuery) -> SongCandidate | None:
         cache_key = SongHistory.key(query.artist, query.song_name or "*")

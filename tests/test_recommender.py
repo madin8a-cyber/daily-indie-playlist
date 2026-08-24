@@ -60,6 +60,15 @@ class PartiallyMatchingITunesClient(FakeITunesClient):
         return super().find_song(query)
 
 
+class NoMatchingITunesClient(FakeITunesClient):
+    def find_song(self, query: SongQuery) -> SongCandidate | None:
+        self.counter += 1
+        return None
+
+    def search_artist_tracks(self, artist: str, genre: str, reason: str, limit: int = 5) -> list[SongCandidate]:
+        return []
+
+
 class CandidateRecommender(Recommender):
     def __init__(
         self,
@@ -72,6 +81,11 @@ class CandidateRecommender(Recommender):
 
     def _candidate_queries(self, playlist_date: str) -> list[SongQuery]:
         return self.candidates
+
+
+class NoEmergencyCandidateRecommender(CandidateRecommender):
+    def _emergency_queries(self) -> list[SongQuery]:
+        return []
 
 
 class RecommenderTests(unittest.TestCase):
@@ -230,6 +244,20 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(sum(1 for song in songs if song.bucket == "recent"), 4)
         self.assertEqual(sum(1 for song in songs if song.bucket == "classic"), 4)
         self.assertEqual(len({song.artist for song in songs}), 20)
+
+    def test_broad_soft_rock_pop_fallback_can_complete_playlist(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            recommender = NoEmergencyCandidateRecommender(
+                candidates=[],
+                history=history,
+                itunes=NoMatchingITunesClient(),
+            )
+
+            songs = recommender.generate(playlist_date="2026-08-24", seed=20260824, total=20)
+
+        self.assertEqual(len(songs), 20)
+        self.assertTrue(any("Soft Rock" in song.genre or "Pop" in song.genre for song in songs))
 
 
 def make_candidates(count: int, bucket: str, artist_prefix: str) -> list[SongQuery]:
