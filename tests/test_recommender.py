@@ -88,6 +88,11 @@ class NoEmergencyCandidateRecommender(CandidateRecommender):
         return []
 
 
+class NoFallbackCandidateRecommender(NoEmergencyCandidateRecommender):
+    def _broad_fallback_queries(self) -> list[SongQuery]:
+        return []
+
+
 class RecommenderTests(unittest.TestCase):
     def test_generates_twenty_tracks_without_openai(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -258,6 +263,20 @@ class RecommenderTests(unittest.TestCase):
 
         self.assertEqual(len(songs), 20)
         self.assertTrue(any("Soft Rock" in song.genre or "Pop" in song.genre for song in songs))
+
+    def test_generated_search_fallback_prevents_crash_when_all_pools_are_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            recommender = NoFallbackCandidateRecommender(
+                candidates=[],
+                history=history,
+                itunes=NoMatchingITunesClient(),
+            )
+
+            songs = recommender.generate(playlist_date="2026-08-24", seed=20260824, total=20)
+
+        self.assertEqual(len(songs), 20)
+        self.assertEqual(sum(1 for song in songs if song.source == "Generated search fallback"), 20)
 
 
 def make_candidates(count: int, bucket: str, artist_prefix: str) -> list[SongQuery]:
