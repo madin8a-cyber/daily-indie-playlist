@@ -44,10 +44,30 @@ class FakeITunesClient:
             for index in range(limit)
         ]
 
+    def apple_music_search_url(self, artist: str, song_name: str) -> str:
+        return f"https://music.apple.com/search?term={artist}+{song_name}"
+
+
+class PartiallyMatchingITunesClient(FakeITunesClient):
+    def __init__(self, matches: int) -> None:
+        super().__init__()
+        self.matches = matches
+
+    def find_song(self, query: SongQuery) -> SongCandidate | None:
+        if self.counter >= self.matches:
+            self.counter += 1
+            return None
+        return super().find_song(query)
+
 
 class CandidateRecommender(Recommender):
-    def __init__(self, candidates: list[SongQuery], history: SongHistory) -> None:
-        super().__init__(itunes=FakeITunesClient(), history=history, openai_api_key="test-key")
+    def __init__(
+        self,
+        candidates: list[SongQuery],
+        history: SongHistory,
+        itunes: FakeITunesClient | None = None,
+    ) -> None:
+        super().__init__(itunes=itunes or FakeITunesClient(), history=history, openai_api_key="test-key")
         self.candidates = candidates
 
     def _candidate_queries(self, playlist_date: str) -> list[SongQuery]:
@@ -163,6 +183,26 @@ class RecommenderTests(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(fake_itunes.counter, 1)
+
+    def test_uses_unverified_candidates_when_itunes_matches_are_insufficient(self) -> None:
+        candidates = make_candidates(70, "primary", "Primary Artist")
+        candidates.extend(make_candidates(20, "recent", "Recent Artist"))
+        candidates.extend(make_candidates(20, "classic", "Classic Artist"))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            recommender = CandidateRecommender(
+                candidates,
+                history,
+                itunes=PartiallyMatchingITunesClient(matches=13),
+            )
+
+            songs = recommender.generate(playlist_date="2026-08-23", seed=20260823, total=20)
+
+        self.assertEqual(len(songs), 20)
+        self.assertEqual(sum(1 for song in songs if song.bucket == "primary"), 12)
+        self.assertEqual(sum(1 for song in songs if song.bucket == "recent"), 4)
+        self.assertEqual(sum(1 for song in songs if song.bucket == "classic"), 4)
+        self.assertGreaterEqual(sum(1 for song in songs if song.source == "AI curator candidate"), 7)
 
 
 def make_candidates(count: int, bucket: str, artist_prefix: str) -> list[SongQuery]:

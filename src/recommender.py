@@ -115,6 +115,17 @@ class Recommender:
             selected_keys=selected_keys,
             selected_artists=selected_artists,
         )
+        if len(primary) < 12:
+            primary.extend(
+                self._fallback_from_queries(
+                    candidates,
+                    bucket="primary",
+                    count=12 - len(primary),
+                    playlist_date=playlist_date,
+                    selected_keys=selected_keys,
+                    selected_artists=selected_artists,
+                )
+            )
         new_releases = self._resolve_bucket(
             candidates,
             bucket="recent",
@@ -123,6 +134,17 @@ class Recommender:
             selected_keys=selected_keys,
             selected_artists=selected_artists,
         )
+        if len(new_releases) < 4:
+            new_releases.extend(
+                self._fallback_from_queries(
+                    candidates,
+                    bucket="recent",
+                    count=4 - len(new_releases),
+                    playlist_date=playlist_date,
+                    selected_keys=selected_keys,
+                    selected_artists=selected_artists,
+                )
+            )
         classics = self._resolve_bucket(
             candidates,
             bucket="classic",
@@ -131,11 +153,33 @@ class Recommender:
             selected_keys=selected_keys,
             selected_artists=selected_artists,
         )
+        if len(classics) < 4:
+            classics.extend(
+                self._fallback_from_queries(
+                    candidates,
+                    bucket="classic",
+                    count=4 - len(classics),
+                    playlist_date=playlist_date,
+                    selected_keys=selected_keys,
+                    selected_artists=selected_artists,
+                )
+            )
 
         selected = primary + new_releases + classics
         if len(selected) < total:
             LOGGER.warning("Only resolved %s tracks from initial plan; using fallback expansion", len(selected))
             selected.extend(self._fallback_fill(total - len(selected), selected, playlist_date))
+        if len(selected) < total:
+            selected.extend(
+                self._fallback_from_queries(
+                    candidates,
+                    bucket=None,
+                    count=total - len(selected),
+                    playlist_date=playlist_date,
+                    selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
+                    selected_artists={normalize_history(song.artist) for song in selected},
+                )
+            )
         if len(selected) < total:
             raise RuntimeError(f"Could only produce {len(selected)} unique tracks; need {total}")
         return selected[:total]
@@ -204,6 +248,43 @@ class Recommender:
             if len(results) == count:
                 break
         return results
+
+    def _fallback_from_queries(
+        self,
+        queries: list[SongQuery],
+        bucket: str | None,
+        count: int,
+        playlist_date: str,
+        selected_keys: set[str],
+        selected_artists: set[str],
+    ) -> list[SongCandidate]:
+        results: list[SongCandidate] = []
+        bucket_queries = [query for query in queries if bucket is None or query.bucket == bucket]
+        for query in bucket_queries:
+            if not query.song_name or not query.artist:
+                continue
+            candidate = self._unverified_candidate(query)
+            if not self._is_allowed(candidate, playlist_date, selected_keys, selected_artists):
+                continue
+            LOGGER.info("Using unverified candidate fallback: %s - %s", candidate.artist, candidate.song_name)
+            results.append(candidate)
+            selected_keys.add(SongHistory.key(candidate.artist, candidate.song_name))
+            selected_artists.add(normalize_history(candidate.artist))
+            if len(results) == count:
+                break
+        return results
+
+    def _unverified_candidate(self, query: SongQuery) -> SongCandidate:
+        return SongCandidate(
+            song_name=query.song_name,
+            artist=query.artist,
+            album="Unknown Album",
+            genre=query.genre,
+            apple_music_url=self.itunes.apple_music_search_url(query.artist, query.song_name),
+            reason=f"{query.reason} Apple Music direct match was unavailable; using search link.",
+            source="AI curator candidate",
+            bucket=query.bucket,
+        )
 
     def _find_song_cached(self, query: SongQuery) -> SongCandidate | None:
         cache_key = SongHistory.key(query.artist, query.song_name or "*")
