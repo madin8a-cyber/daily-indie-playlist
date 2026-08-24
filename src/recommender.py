@@ -77,6 +77,41 @@ CLASSIC_ARTISTS = [
     "Elliott Smith",
 ]
 
+EMERGENCY_QUERIES = [
+    ("primary", "The Shins", "New Slang", "Indie Rock"),
+    ("primary", "Camera Obscura", "Lloyd, I'm Ready to Be Heartbroken", "Indie Pop"),
+    ("primary", "Stars", "Your Ex-Lover Is Dead", "Indie Pop"),
+    ("primary", "The Pains of Being Pure at Heart", "Young Adult Friction", "Indie Pop"),
+    ("primary", "Wye Oak", "Civilian", "Indie Rock"),
+    ("primary", "Deerhunter", "Desire Lines", "Alternative"),
+    ("primary", "Slowdive", "Sugar for the Pill", "Alternative"),
+    ("primary", "The War on Drugs", "Red Eyes", "Indie Rock"),
+    ("primary", "Sharon Van Etten", "Seventeen", "Alternative"),
+    ("primary", "Angel Olsen", "Shut Up Kiss Me", "Indie Rock"),
+    ("primary", "Lucy Dacus", "Night Shift", "Indie Rock"),
+    ("primary", "Waxahatchee", "Fire", "Indie Rock"),
+    ("primary", "Destroyer", "Kaputt", "Indie Pop"),
+    ("primary", "The New Pornographers", "Mass Romantic", "Indie Rock"),
+    ("primary", "TV on the Radio", "Wolf Like Me", "Alternative"),
+    ("primary", "Spoon", "The Underdog", "Indie Rock"),
+    ("recent", "Nilufer Yanya", "Like I Say (I runaway)", "Recent Indie"),
+    ("recent", "Magdalena Bay", "Death & Romance", "Recent Alternative"),
+    ("recent", "Jessica Pratt", "Life Is", "Recent Indie"),
+    ("recent", "Yard Act", "Dream Job", "Recent Alternative"),
+    ("recent", "Mannequin Pussy", "I Got Heaven", "Recent Indie Rock"),
+    ("recent", "Friko", "Crashing Through", "Recent Indie Rock"),
+    ("recent", "Grian Chatten", "Fairlies", "Recent Alternative"),
+    ("recent", "Ratboys", "Morning Zoo", "Recent Indie Rock"),
+    ("classic", "The Replacements", "Alex Chilton", "Classic Alternative"),
+    ("classic", "Dinosaur Jr.", "Feel the Pain", "Classic Alternative"),
+    ("classic", "Built to Spill", "Carry the Zero", "Classic Indie"),
+    ("classic", "Guided By Voices", "Game of Pricks", "Classic Indie"),
+    ("classic", "The Jesus and Mary Chain", "Just Like Honey", "Classic Alternative"),
+    ("classic", "Cocteau Twins", "Heaven or Las Vegas", "Classic Alternative"),
+    ("classic", "Husker Du", "Makes No Sense At All", "Classic Alternative"),
+    ("classic", "The Breeders", "Cannonball", "Classic Alternative"),
+]
+
 
 @dataclass(frozen=True)
 class PlaylistPlan:
@@ -126,6 +161,16 @@ class Recommender:
                     selected_artists=selected_artists,
                 )
             )
+        if len(primary) < 12:
+            primary.extend(
+                self._relaxed_fallback_from_queries(
+                    self._emergency_queries(),
+                    bucket="primary",
+                    count=12 - len(primary),
+                    selected_keys=selected_keys,
+                    selected_artists=selected_artists,
+                )
+            )
         new_releases = self._resolve_bucket(
             candidates,
             bucket="recent",
@@ -141,6 +186,16 @@ class Recommender:
                     bucket="recent",
                     count=4 - len(new_releases),
                     playlist_date=playlist_date,
+                    selected_keys=selected_keys,
+                    selected_artists=selected_artists,
+                )
+            )
+        if len(new_releases) < 4:
+            new_releases.extend(
+                self._relaxed_fallback_from_queries(
+                    self._emergency_queries(),
+                    bucket="recent",
+                    count=4 - len(new_releases),
                     selected_keys=selected_keys,
                     selected_artists=selected_artists,
                 )
@@ -164,6 +219,16 @@ class Recommender:
                     selected_artists=selected_artists,
                 )
             )
+        if len(classics) < 4:
+            classics.extend(
+                self._relaxed_fallback_from_queries(
+                    self._emergency_queries(),
+                    bucket="classic",
+                    count=4 - len(classics),
+                    selected_keys=selected_keys,
+                    selected_artists=selected_artists,
+                )
+            )
 
         selected = primary + new_releases + classics
         if len(selected) < total:
@@ -171,11 +236,10 @@ class Recommender:
             selected.extend(self._fallback_fill(total - len(selected), selected, playlist_date))
         if len(selected) < total:
             selected.extend(
-                self._fallback_from_queries(
-                    candidates,
+                self._relaxed_fallback_from_queries(
+                    candidates + self._emergency_queries(),
                     bucket=None,
                     count=total - len(selected),
-                    playlist_date=playlist_date,
                     selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
                     selected_artists={normalize_history(song.artist) for song in selected},
                 )
@@ -274,17 +338,72 @@ class Recommender:
                 break
         return results
 
-    def _unverified_candidate(self, query: SongQuery) -> SongCandidate:
+    def _relaxed_fallback_from_queries(
+        self,
+        queries: list[SongQuery],
+        bucket: str | None,
+        count: int,
+        selected_keys: set[str],
+        selected_artists: set[str],
+    ) -> list[SongCandidate]:
+        results: list[SongCandidate] = []
+        bucket_queries = [query for query in queries if bucket is None or query.bucket == bucket]
+        for query in bucket_queries:
+            if not query.song_name or not query.artist:
+                continue
+            candidate = self._unverified_candidate(query, relaxed=True)
+            if not self._is_allowed_relaxed(candidate, selected_keys, selected_artists):
+                continue
+            LOGGER.warning("Using relaxed fallback candidate: %s - %s", candidate.artist, candidate.song_name)
+            results.append(candidate)
+            selected_keys.add(SongHistory.key(candidate.artist, candidate.song_name))
+            selected_artists.add(normalize_history(candidate.artist))
+            if len(results) == count:
+                break
+        return results
+
+    def _unverified_candidate(self, query: SongQuery, relaxed: bool = False) -> SongCandidate:
+        suffix = (
+            " Strict history filters left the playlist short, so this relaxed fallback uses a search link."
+            if relaxed
+            else " Apple Music direct match was unavailable; using search link."
+        )
         return SongCandidate(
             song_name=query.song_name,
             artist=query.artist,
             album="Unknown Album",
             genre=query.genre,
             apple_music_url=self.itunes.apple_music_search_url(query.artist, query.song_name),
-            reason=f"{query.reason} Apple Music direct match was unavailable; using search link.",
+            reason=f"{query.reason}{suffix}",
             source="AI curator candidate",
             bucket=query.bucket,
         )
+
+    def _is_allowed_relaxed(
+        self,
+        song: SongCandidate,
+        selected_keys: set[str],
+        selected_artists: set[str],
+    ) -> bool:
+        key = SongHistory.key(song.artist, song.song_name)
+        artist_key = normalize_history(song.artist)
+        if key in selected_keys:
+            return False
+        if artist_key in selected_artists:
+            return False
+        return True
+
+    def _emergency_queries(self) -> list[SongQuery]:
+        return [
+            SongQuery(
+                song_name=song_name,
+                artist=artist,
+                genre=genre,
+                reason="Emergency fallback pick to keep the daily playlist complete.",
+                bucket=bucket,
+            )
+            for bucket, artist, song_name, genre in EMERGENCY_QUERIES
+        ]
 
     def _find_song_cached(self, query: SongQuery) -> SongCandidate | None:
         cache_key = SongHistory.key(query.artist, query.song_name or "*")

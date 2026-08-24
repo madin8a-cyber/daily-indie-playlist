@@ -204,6 +204,33 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(sum(1 for song in songs if song.bucket == "classic"), 4)
         self.assertGreaterEqual(sum(1 for song in songs if song.source == "AI curator candidate"), 7)
 
+    def test_relaxed_emergency_fallback_when_history_blocks_candidates(self) -> None:
+        candidates = make_candidates(70, "primary", "Primary Artist")
+        candidates.extend(make_candidates(20, "recent", "Recent Artist"))
+        candidates.extend(make_candidates(20, "classic", "Classic Artist"))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            history.add_many(
+                [
+                    HistoryEntry(
+                        song_name=query.song_name,
+                        artist=query.artist,
+                        album="Already Used",
+                        date_added="2026-08-20",
+                    )
+                    for query in candidates
+                ]
+            )
+            recommender = CandidateRecommender(candidates, history)
+
+            songs = recommender.generate(playlist_date="2026-08-24", seed=20260824, total=20)
+
+        self.assertEqual(len(songs), 20)
+        self.assertEqual(sum(1 for song in songs if song.bucket == "primary"), 12)
+        self.assertEqual(sum(1 for song in songs if song.bucket == "recent"), 4)
+        self.assertEqual(sum(1 for song in songs if song.bucket == "classic"), 4)
+        self.assertEqual(len({song.artist for song in songs}), 20)
+
 
 def make_candidates(count: int, bucket: str, artist_prefix: str) -> list[SongQuery]:
     return [
