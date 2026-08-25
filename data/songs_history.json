@@ -1462,5 +1462,29 @@
     "artist": "The Replacements",
     "album": "Unknown Album",
     "date_added": "2026-08-24"
+  },
+  {
+    "song_name": "Mr. Blue Sky",
+    "artist": "Electric Light Orchestra",
+    "album": "All Over the World: The Very Best of Electric Light Orchestra",
+    "date_added": "2026-08-25"
+  },
+  {
+    "song_name": "Classic Rock",
+    "artist": "Till & Obel",
+    "album": "Unknown Album",
+    "date_added": "2026-08-25"
+  },
+  {
+    "song_name": "Classic Rock",
+    "artist": "Bug Attack!",
+    "album": "Unknown Album",
+    "date_added": "2026-08-25"
+  },
+  {
+    "song_name": "Rock Classic",
+    "artist": "Electric High",
+    "album": "Unknown Album",
+    "date_added": "2026-08-25"
   }
 ]
