@@ -1486,5 +1486,35 @@
     "artist": "Electric High",
     "album": "Unknown Album",
     "date_added": "2026-08-25"
+  },
+  {
+    "song_name": "Still the River Flows",
+    "artist": "The National Parks",
+    "album": "The National Parks",
+    "date_added": "2026-08-28"
+  },
+  {
+    "song_name": "Shotgun",
+    "artist": "Soccer Mommy",
+    "album": "Sometimes, Forever",
+    "date_added": "2026-08-28"
+  },
+  {
+    "song_name": "Feel the Pain",
+    "artist": "Dinosaur Jr.",
+    "album": "Unknown Album",
+    "date_added": "2026-08-28"
+  },
+  {
+    "song_name": "Carry the Zero",
+    "artist": "Built to Spill",
+    "album": "Unknown Album",
+    "date_added": "2026-08-28"
+  },
+  {
+    "song_name": "Game of Pricks",
+    "artist": "Guided By Voices",
+    "album": "Unknown Album",
+    "date_added": "2026-08-28"
   }
 ]
