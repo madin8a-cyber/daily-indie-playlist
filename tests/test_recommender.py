@@ -92,6 +92,9 @@ class NoFallbackCandidateRecommender(NoEmergencyCandidateRecommender):
     def _broad_fallback_queries(self) -> list[SongQuery]:
         return []
 
+    def _all_fallback_queries(self) -> list[SongQuery]:
+        return []
+
 
 class RecommenderTests(unittest.TestCase):
     def test_generates_twenty_tracks_without_openai(self) -> None:
@@ -184,6 +187,36 @@ class RecommenderTests(unittest.TestCase):
             {(song.artist, song.song_name) for song in songs},
         )
 
+    def test_skips_an_artist_used_within_seven_days(self) -> None:
+        candidates = [
+            SongQuery(
+                song_name="A Different Song",
+                artist="Recently Played Artist",
+                genre="Indie Rock",
+                reason="Must be skipped because the artist is still cooling down.",
+                bucket="primary",
+            )
+        ]
+        candidates.extend(make_candidates(70, "primary", "Primary Artist"))
+        candidates.extend(make_candidates(20, "recent", "Recent Artist"))
+        candidates.extend(make_candidates(20, "classic", "Classic Artist"))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            history.add_many(
+                [
+                    HistoryEntry(
+                        song_name="An Older Song",
+                        artist="Recently Played Artist",
+                        album="Old Album",
+                        date_added="2026-08-20",
+                    )
+                ]
+            )
+            recommender = CandidateRecommender(candidates, history)
+            songs = recommender.generate(playlist_date="2026-08-24", seed=20260824, total=20)
+
+        self.assertNotIn("Recently Played Artist", {song.artist for song in songs})
+
     def test_recommender_caches_duplicate_song_lookup(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             history = SongHistory(Path(temp_dir) / "songs_history.json")
@@ -249,6 +282,33 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(sum(1 for song in songs if song.bucket == "recent"), 4)
         self.assertEqual(sum(1 for song in songs if song.bucket == "classic"), 4)
         self.assertEqual(len({song.artist for song in songs}), 20)
+
+    def test_fallback_never_reuses_a_track_from_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = SongHistory(Path(temp_dir) / "songs_history.json")
+            recommender = CandidateRecommender(
+                candidates=[],
+                history=history,
+                itunes=NoMatchingITunesClient(),
+            )
+            first = recommender.generate(playlist_date="2026-08-24", seed=20260824, total=20)
+            history.add_many(
+                [
+                    HistoryEntry(
+                        song_name=song.song_name,
+                        artist=song.artist,
+                        album=song.album,
+                        date_added="2026-08-24",
+                    )
+                    for song in first
+                ]
+            )
+            second = recommender.generate(playlist_date="2026-08-25", seed=20260825, total=20)
+
+        first_keys = {(song.artist, song.song_name) for song in first}
+        second_keys = {(song.artist, song.song_name) for song in second}
+        self.assertEqual(len(second), 20)
+        self.assertTrue(first_keys.isdisjoint(second_keys))
 
     def test_broad_soft_rock_pop_fallback_can_complete_playlist(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

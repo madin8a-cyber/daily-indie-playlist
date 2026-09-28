@@ -37,6 +37,9 @@ class SongHistory:
     def contains_recent(self, artist: str, song_name: str, playlist_date: str, days: int = 30) -> bool:
         return self.key(artist, song_name) in self.recent_song_keys(playlist_date, days)
 
+    def contains_artist_recent(self, artist: str, playlist_date: str, days: int = 7) -> bool:
+        return normalize(artist) in self.recent_artist_keys(playlist_date, days)
+
     def recent_song_keys(self, playlist_date: str, days: int = 30) -> set[str]:
         end_date = dt.date.fromisoformat(playlist_date)
         start_date = end_date - dt.timedelta(days=days - 1)
@@ -46,6 +49,16 @@ class SongHistory:
             if added_on and start_date <= added_on <= end_date:
                 keys.add(self.key(entry.artist, entry.song_name))
         return keys
+
+    def recent_artist_keys(self, playlist_date: str, days: int = 7) -> set[str]:
+        end_date = dt.date.fromisoformat(playlist_date)
+        start_date = end_date - dt.timedelta(days=days - 1)
+        artists: set[str] = set()
+        for entry in self.entries:
+            added_on = parse_date(entry.date_added)
+            if added_on and start_date <= added_on <= end_date:
+                artists.add(normalize(entry.artist))
+        return artists
 
     def add_many(self, songs: list[HistoryEntry]) -> None:
         for song in songs:

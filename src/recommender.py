@@ -155,6 +155,91 @@ BROAD_FALLBACK_QUERIES = [
     ("classic", "Mazzy Star", "Fade Into You", "Dream Pop"),
 ]
 
+# These are deliberately concrete tracks, rather than artist-only queries.  They
+# keep a run useful when iTunes, Last.fm, or the AI curator is temporarily
+# unavailable.  Every entry still goes through the normal history filter.
+CURATED_BACKUP_TRACKS = [
+    ("primary", "The Postal Service", "Such Great Heights", "Indie Pop"),
+    ("primary", "Rilo Kiley", "Portions for Foxes", "Indie Rock"),
+    ("primary", "The Antlers", "Kettering", "Indie Rock"),
+    ("primary", "Grizzly Bear", "Two Weeks", "Indie Rock"),
+    ("primary", "Local Natives", "Airplanes", "Indie Rock"),
+    ("primary", "DIIV", "Doused", "Indie Rock"),
+    ("primary", "Wild Nothing", "Chinatown", "Dream Pop"),
+    ("primary", "Youth Lagoon", "17", "Indie Pop"),
+    ("primary", "Unknown Mortal Orchestra", "Hunnybee", "Indie Rock"),
+    ("primary", "Cigarettes After Sex", "Apocalypse", "Dream Pop"),
+    ("primary", "Perfume Genius", "On the Floor", "Indie Pop"),
+    ("primary", "Aldous Harding", "The Barrel", "Indie Folk"),
+    ("primary", "Courtney Barnett", "Depreston", "Indie Rock"),
+    ("primary", "FKA twigs", "Two Weeks", "Alternative"),
+    ("primary", "Weyes Blood", "Andromeda", "Indie Pop"),
+    ("primary", "Alex G", "Runner", "Indie Rock"),
+    ("primary", "Hop Along", "Tibetan Pop Stars", "Indie Rock"),
+    ("primary", "Cloud Nothings", "Stay Useless", "Indie Rock"),
+    ("primary", "Metric", "Gimme Sympathy", "Alternative"),
+    ("primary", "Sleater-Kinney", "Modern Girl", "Indie Rock"),
+    ("primary", "St. Vincent", "Digital Witness", "Alternative"),
+    ("primary", "Tennis", "Need Your Love", "Indie Pop"),
+    ("primary", "Yumi Zouma", "In Camera", "Indie Pop"),
+    ("primary", "TOPS", "Way To Be Loved", "Indie Pop"),
+    ("primary", "Molchat Doma", "Sudno", "Alternative"),
+    ("primary", "Nation of Language", "On Division St", "Indie Pop"),
+    ("primary", "IDLES", "Never Fight a Man with a Perm", "Alternative"),
+    ("primary", "Shame", "One Rizla", "Indie Rock"),
+    ("primary", "The Orielles", "Space Samba", "Indie Pop"),
+    ("primary", "Rolling Blackouts Coastal Fever", "Talking Straight", "Indie Rock"),
+    ("primary", "Khruangbin", "Time (You and I)", "Indie Pop"),
+    ("primary", "Men I Trust", "Show Me How", "Indie Pop"),
+    ("recent", "Wednesday", "Bull Believer", "Recent Indie Rock"),
+    ("recent", "MJ Lenderman", "She's Leaving You", "Recent Indie Rock"),
+    ("recent", "Sabrina Teitelbaum", "Kiss City", "Recent Alternative"),
+    ("recent", "Faye Webster", "Lego Ring", "Recent Indie Pop"),
+    ("recent", "Lola Young", "Messy", "Recent Alternative"),
+    ("recent", "Cindy Lee", "Wild Rose", "Recent Indie"),
+    ("recent", "Chelsea Wolfe", "Dusk", "Recent Alternative"),
+    ("recent", "Sprints", "Heavy", "Recent Indie Rock"),
+    ("recent", "English Teacher", "The World's Biggest Paving Slab", "Recent Alternative"),
+    ("recent", "Geordie Greep", "Holy, Holy", "Recent Alternative"),
+    ("recent", "Kim Gordon", "BYE BYE", "Recent Alternative"),
+    ("recent", "Beth Gibbons", "Floating on a Moment", "Recent Alternative"),
+    ("recent", "Charli xcx", "Von dutch", "Recent Pop"),
+    ("recent", "Mk.gee", "Are You Looking Up", "Recent Alternative"),
+    ("recent", "Amyl and The Sniffers", "U Should Not Be Doing That", "Recent Rock"),
+    ("recent", "Father John Misty", "Mahashmashana", "Recent Indie Rock"),
+    ("recent", "Soccer Mommy", "Driver", "Recent Indie Rock"),
+    ("recent", "Bright Eyes", "Bells and Whistles", "Recent Indie Rock"),
+    ("recent", "Nilüfer Yanya", "Method Actor", "Recent Indie"),
+    ("recent", "Font", "Looking At Engines", "Recent Alternative"),
+    ("recent", "Mannequin Pussy", "Nothing Like", "Recent Indie Rock"),
+    ("recent", "Adrianne Lenker", "Sadness As A Gift", "Recent Indie Folk"),
+    ("recent", "Waxahatchee", "Right Back to It", "Recent Indie Rock"),
+    ("classic", "The Feelies", "Away", "Classic Indie"),
+    ("classic", "Galaxie 500", "Strange", "Classic Indie"),
+    ("classic", "The Go-Betweens", "Streets of Your Town", "Classic Indie"),
+    ("classic", "The Housemartins", "Happy Hour", "Classic Indie Pop"),
+    ("classic", "The Stone Roses", "I Am the Resurrection", "Classic Alternative"),
+    ("classic", "Ride", "Vapour Trail", "Classic Alternative"),
+    ("classic", "Lush", "Ladykillers", "Classic Alternative"),
+    ("classic", "The Sundays", "Summertime", "Classic Indie Pop"),
+    ("classic", "Teenage Fanclub", "The Concept", "Classic Indie Rock"),
+    ("classic", "Superchunk", "Slack Motherfucker", "Classic Indie Rock"),
+    ("classic", "The Lemonheads", "It's a Shame About Ray", "Classic Alternative"),
+    ("classic", "The La's", "There She Goes", "Classic Indie Pop"),
+    ("classic", "The Beta Band", "Dry the Rain", "Classic Indie"),
+    ("classic", "The Flaming Lips", "Do You Realize??", "Classic Alternative"),
+    ("classic", "Spiritualized", "Ladies and Gentlemen We Are Floating in Space", "Classic Alternative"),
+    ("classic", "Portishead", "Glory Box", "Classic Alternative"),
+    ("classic", "Massive Attack", "Teardrop", "Classic Alternative"),
+    ("classic", "Air", "La femme d'argent", "Classic Indie"),
+    ("classic", "The Cardigans", "Lovefool", "Classic Indie Pop"),
+    ("classic", "The Dismemberment Plan", "The Ice of Boston", "Classic Indie Rock"),
+    ("classic", "Mission of Burma", "That's When I Reach for My Revolver", "Classic Alternative"),
+    ("classic", "The Raincoats", "Fairytale in the Supermarket", "Classic Post-Punk"),
+    ("classic", "XTC", "Making Plans for Nigel", "Classic Alternative"),
+    ("classic", "The Undertones", "Teenage Kicks", "Classic Alternative"),
+]
+
 
 @dataclass(frozen=True)
 class PlaylistPlan:
@@ -207,9 +292,10 @@ class Recommender:
         if len(primary) < 12:
             primary.extend(
                 self._relaxed_fallback_from_queries(
-                    self._emergency_queries(),
+                    self._all_fallback_queries(),
                     bucket="primary",
                     count=12 - len(primary),
+                    playlist_date=playlist_date,
                     selected_keys=selected_keys,
                     selected_artists=selected_artists,
                 )
@@ -236,9 +322,10 @@ class Recommender:
         if len(new_releases) < 4:
             new_releases.extend(
                 self._relaxed_fallback_from_queries(
-                    self._emergency_queries(),
+                    self._all_fallback_queries(),
                     bucket="recent",
                     count=4 - len(new_releases),
+                    playlist_date=playlist_date,
                     selected_keys=selected_keys,
                     selected_artists=selected_artists,
                 )
@@ -265,9 +352,10 @@ class Recommender:
         if len(classics) < 4:
             classics.extend(
                 self._relaxed_fallback_from_queries(
-                    self._emergency_queries(),
+                    self._all_fallback_queries(),
                     bucket="classic",
                     count=4 - len(classics),
+                    playlist_date=playlist_date,
                     selected_keys=selected_keys,
                     selected_artists=selected_artists,
                 )
@@ -280,9 +368,10 @@ class Recommender:
         if len(selected) < total:
             selected.extend(
                 self._relaxed_fallback_from_queries(
-                    candidates + self._emergency_queries() + self._broad_fallback_queries(),
+                    candidates + self._all_fallback_queries(),
                     bucket=None,
                     count=total - len(selected),
+                    playlist_date=playlist_date,
                     selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
                     selected_artists={normalize_history(song.artist) for song in selected},
                 )
@@ -290,9 +379,11 @@ class Recommender:
         if len(selected) < total:
             selected.extend(
                 self._last_chance_fallback(
-                    queries=self._broad_fallback_queries() + self._emergency_queries(),
+                    queries=self._all_fallback_queries(),
                     count=total - len(selected),
+                    playlist_date=playlist_date,
                     selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
+                    selected_artists={normalize_history(song.artist) for song in selected},
                 )
             )
         if len(selected) < total:
@@ -304,6 +395,7 @@ class Recommender:
             selected.extend(
                 self._generated_search_fallback(
                     count=total - len(selected),
+                    playlist_date=playlist_date,
                     selected_keys={SongHistory.key(song.artist, song.song_name) for song in selected},
                 )
             )
@@ -404,18 +496,20 @@ class Recommender:
         queries: list[SongQuery],
         bucket: str | None,
         count: int,
+        playlist_date: str,
         selected_keys: set[str],
         selected_artists: set[str],
     ) -> list[SongCandidate]:
         results: list[SongCandidate] = []
         bucket_queries = [query for query in queries if bucket is None or query.bucket == bucket]
+        random.shuffle(bucket_queries)
         for query in bucket_queries:
             if not query.song_name or not query.artist:
                 continue
-            candidate = self._unverified_candidate(query, relaxed=True)
-            if not self._is_allowed_relaxed(candidate, selected_keys, selected_artists):
+            candidate = self._unverified_candidate(query)
+            if not self._is_allowed(candidate, playlist_date, selected_keys, selected_artists):
                 continue
-            LOGGER.warning("Using relaxed fallback candidate: %s - %s", candidate.artist, candidate.song_name)
+            LOGGER.warning("Using history-safe fallback candidate: %s - %s", candidate.artist, candidate.song_name)
             results.append(candidate)
             selected_keys.add(SongHistory.key(candidate.artist, candidate.song_name))
             selected_artists.add(normalize_history(candidate.artist))
@@ -439,20 +533,6 @@ class Recommender:
             source="AI curator candidate",
             bucket=query.bucket,
         )
-
-    def _is_allowed_relaxed(
-        self,
-        song: SongCandidate,
-        selected_keys: set[str],
-        selected_artists: set[str],
-    ) -> bool:
-        key = SongHistory.key(song.artist, song.song_name)
-        artist_key = normalize_history(song.artist)
-        if key in selected_keys:
-            return False
-        if artist_key in selected_artists:
-            return False
-        return True
 
     def _emergency_queries(self) -> list[SongQuery]:
         return [
@@ -478,32 +558,56 @@ class Recommender:
             for bucket, artist, song_name, genre in BROAD_FALLBACK_QUERIES
         ]
 
+    def _all_fallback_queries(self) -> list[SongQuery]:
+        tracks = EMERGENCY_QUERIES + BROAD_FALLBACK_QUERIES + CURATED_BACKUP_TRACKS
+        queries = [
+            SongQuery(
+                song_name=song_name,
+                artist=artist,
+                genre=genre,
+                reason="Curated backup pick used while live music sources were unavailable.",
+                bucket=bucket,
+            )
+            for bucket, artist, song_name, genre in tracks
+        ]
+        random.shuffle(queries)
+        return queries
+
     def _last_chance_fallback(
         self,
         queries: list[SongQuery],
         count: int,
+        playlist_date: str,
         selected_keys: set[str],
+        selected_artists: set[str],
     ) -> list[SongCandidate]:
         results: list[SongCandidate] = []
+        queries = list(queries)
+        random.shuffle(queries)
         for query in queries:
             if not query.song_name or not query.artist:
                 continue
-            candidate = self._unverified_candidate(query, relaxed=True)
-            key = SongHistory.key(candidate.artist, candidate.song_name)
-            if key in selected_keys:
+            candidate = self._unverified_candidate(query)
+            if not self._is_allowed(candidate, playlist_date, selected_keys, selected_artists):
                 continue
             LOGGER.warning(
-                "Using last-chance broad fallback candidate: %s - %s",
+                "Using final history-safe fallback candidate: %s - %s",
                 candidate.artist,
                 candidate.song_name,
             )
             results.append(candidate)
-            selected_keys.add(key)
+            selected_keys.add(SongHistory.key(candidate.artist, candidate.song_name))
+            selected_artists.add(normalize_history(candidate.artist))
             if len(results) == count:
                 break
         return results
 
-    def _generated_search_fallback(self, count: int, selected_keys: set[str]) -> list[SongCandidate]:
+    def _generated_search_fallback(
+        self,
+        count: int,
+        playlist_date: str,
+        selected_keys: set[str],
+    ) -> list[SongCandidate]:
         results: list[SongCandidate] = []
         index = 1
         while len(results) < count:
@@ -512,6 +616,10 @@ class Recommender:
             key = SongHistory.key(artist, song_name)
             index += 1
             if key in selected_keys:
+                continue
+            if self.history.contains(artist, song_name):
+                continue
+            if self.history.contains_artist_recent(artist, playlist_date, days=7):
                 continue
             LOGGER.warning("Using generated search fallback candidate: %s - %s", artist, song_name)
             results.append(
@@ -576,6 +684,9 @@ class Recommender:
             return False
         if self.history.contains_recent(song.artist, song.song_name, playlist_date, days=30):
             LOGGER.info("Skipping recent 30-day duplicate track: %s - %s", song.artist, song.song_name)
+            return False
+        if self.history.contains_artist_recent(song.artist, playlist_date, days=7):
+            LOGGER.info("Skipping artist used within the last 7 days: %s", song.artist)
             return False
         return True
 
